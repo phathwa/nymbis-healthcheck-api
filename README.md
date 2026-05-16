@@ -377,6 +377,14 @@ docs/ARCHITECTURE.md
 This file explains the request flow, module responsibilities, error handling,
 testing strategy, security considerations, and production trade-offs.
 
+## API Documentation
+
+An OpenAPI specification is available at:
+
+```text
+docs/openapi.yaml
+```
+
 ## Assumptions
 
 - AWS EC2 is the only cloud provider implemented for this assessment.

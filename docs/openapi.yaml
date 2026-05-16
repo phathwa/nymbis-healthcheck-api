@@ -1,0 +1,136 @@
+openapi: 3.0.3
+
+info:
+  title: Nymbis EC2 Health Check API
+  version: 1.0.0
+  description: >
+    A small Flask API for checking the health of AWS EC2 instances.
+    The API uses API key authentication, queries AWS EC2 using boto3,
+    returns a JSON health response, and logs each request for audit purposes.
+
+servers:
+  - url: http://127.0.0.1:5000
+    description: Local development server
+
+paths:
+  /api/health/{instance_id}:
+    get:
+      summary: Check EC2 instance health
+      description: >
+        Returns the current EC2 instance state, AWS status check value,
+        derived health value, timestamp, and request correlation ID.
+      operationId: getEc2InstanceHealth
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: instance_id
+          in: path
+          required: true
+          description: AWS EC2 instance ID.
+          schema:
+            type: string
+            example: i-0123456789abcdef0
+      responses:
+        "200":
+          description: EC2 instance health returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                request_id: 6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a
+                instance_id: i-0123456789abcdef0
+                state: running
+                status_code: ok
+                health: healthy
+                timestamp: "2026-05-16T12:30:45Z"
+
+        "401":
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                request_id: 6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a
+                error: Unauthorized
+
+        "404":
+          description: EC2 instance was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                request_id: 6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a
+                error: Instance not found
+
+        "500":
+          description: AWS API call failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                request_id: 6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a
+                error: AWS API failed
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - request_id
+        - instance_id
+        - state
+        - status_code
+        - health
+        - timestamp
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          example: 6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a
+        instance_id:
+          type: string
+          example: i-0123456789abcdef0
+        state:
+          type: string
+          example: running
+        status_code:
+          type: string
+          example: ok
+        health:
+          type: string
+          enum:
+            - healthy
+            - initializing
+            - unhealthy
+            - stopped
+            - terminated
+            - unknown
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-05-16T12:30:45Z"
+
+    ErrorResponse:
+      type: object
+      required:
+        - request_id
+        - error
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          example: 6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a
+        error:
+          type: string
+          example: Unauthorized
