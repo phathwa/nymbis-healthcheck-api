@@ -112,7 +112,10 @@ def test_get_instance_state_reraises_unexpected_client_error():
 
 
 def test_get_instance_status_code_returns_status():
-    """Instance status code should be extracted from describe_instance_status."""
+    """
+    Instance status code should be extracted.
+    The value comes from the describe_instance_status response.
+    """
     ec2_client = Mock()
     ec2_client.describe_instance_status.return_value = {
         "InstanceStatuses": [
@@ -221,7 +224,9 @@ def test_get_instance_state_returns_unknown_when_state_name_missing():
 def test_get_instance_status_code_returns_unknown_when_key_missing():
     """Missing instance status key should return unknown."""
     ec2_client = Mock()
-    ec2_client.describe_instance_status.return_value = {"InstanceStatuses": [{}]}
+    ec2_client.describe_instance_status.return_value = {
+        "InstanceStatuses": [{}]
+    }
 
     status_code = get_instance_status_code(
         ec2_client,

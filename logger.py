@@ -56,7 +56,9 @@ def configure_logger():
     return logger
 
 
-def log_api_request(method, path, api_key, status_code, result=None, error=None):
+def log_api_request(
+    method, path, api_key, status_code, result=None, error=None
+):
     """Log an API request and its outcome.
 
     Args:
