@@ -8,6 +8,7 @@ from flask import Flask, jsonify, request
 from auth import AUTH_ERROR_RESPONSE, is_valid_api_key
 from aws_health import get_instance_health
 from exceptions import InstanceNotFoundError
+from logger import log_api_request
 
 
 def get_current_timestamp():
@@ -50,6 +51,19 @@ def create_error_response(message):
     return {"error": message}
 
 
+def build_response(payload, status_code):
+    """Build a Flask JSON response with a status code.
+
+    Args:
+        payload (dict): JSON response body.
+        status_code (int): HTTP status code.
+
+    Returns:
+        tuple: Flask response tuple.
+    """
+    return jsonify(payload), status_code
+
+
 def create_app():
     """Create and configure the Flask application.
 
@@ -69,18 +83,53 @@ def create_app():
             Response: JSON response containing health information or an error.
         """
         api_key = request.headers.get("X-API-Key")
+        method = request.method
+        path = request.path
 
         if not is_valid_api_key(api_key):
-            return jsonify(AUTH_ERROR_RESPONSE), 401
+            log_api_request(
+                method=method,
+                path=path,
+                api_key=api_key,
+                status_code=401,
+                error="Unauthorized",
+            )
+            return build_response(AUTH_ERROR_RESPONSE, 401)
 
         try:
             health_result = get_instance_health(instance_id)
         except InstanceNotFoundError:
-            return jsonify(create_error_response("Instance not found")), 404
+            error_message = "Instance not found"
+            log_api_request(
+                method=method,
+                path=path,
+                api_key=api_key,
+                status_code=404,
+                error=error_message,
+            )
+            return build_response(create_error_response(error_message), 404)
         except (BotoCoreError, ClientError):
-            return jsonify(create_error_response("AWS API failed")), 500
+            error_message = "AWS API failed"
+            log_api_request(
+                method=method,
+                path=path,
+                api_key=api_key,
+                status_code=500,
+                error=error_message,
+            )
+            return build_response(create_error_response(error_message), 500)
 
-        return jsonify(create_health_response(instance_id, health_result)), 200
+        response_body = create_health_response(instance_id, health_result)
+
+        log_api_request(
+            method=method,
+            path=path,
+            api_key=api_key,
+            status_code=200,
+            result=response_body["health"],
+        )
+
+        return build_response(response_body, 200)
 
     return app
 

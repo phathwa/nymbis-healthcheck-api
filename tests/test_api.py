@@ -15,10 +15,12 @@ def test_health_endpoint_requires_api_key(monkeypatch):
     app = create_app()
     client = app.test_client()
 
-    response = client.get("/api/health/i-0123456789abcdef0")
+    with patch("app.log_api_request") as mock_log_api_request:
+        response = client.get("/api/health/i-0123456789abcdef0")
 
     assert response.status_code == 401
     assert response.get_json() == {"error": "Unauthorized"}
+    mock_log_api_request.assert_called_once()
 
 
 def test_health_endpoint_rejects_invalid_api_key(monkeypatch):
@@ -28,13 +30,15 @@ def test_health_endpoint_rejects_invalid_api_key(monkeypatch):
     app = create_app()
     client = app.test_client()
 
-    response = client.get(
-        "/api/health/i-0123456789abcdef0",
-        headers={"X-API-Key": "wrong-key"},
-    )
+    with patch("app.log_api_request") as mock_log_api_request:
+        response = client.get(
+            "/api/health/i-0123456789abcdef0",
+            headers={"X-API-Key": "wrong-key"},
+        )
 
     assert response.status_code == 401
     assert response.get_json() == {"error": "Unauthorized"}
+    mock_log_api_request.assert_called_once()
 
 
 def test_health_endpoint_accepts_valid_api_key(monkeypatch):
@@ -44,17 +48,18 @@ def test_health_endpoint_accepts_valid_api_key(monkeypatch):
     app = create_app()
     client = app.test_client()
 
-    with patch("app.get_instance_health") as mock_get_instance_health:
-        mock_get_instance_health.return_value = {
-            "state": "running",
-            "status_code": "ok",
-            "health": "healthy",
-        }
+    with patch("app.log_api_request") as mock_log_api_request:
+        with patch("app.get_instance_health") as mock_get_instance_health:
+            mock_get_instance_health.return_value = {
+                "state": "running",
+                "status_code": "ok",
+                "health": "healthy",
+            }
 
-        response = client.get(
-            "/api/health/i-0123456789abcdef0",
-            headers={"X-API-Key": "dev-key"},
-        )
+            response = client.get(
+                "/api/health/i-0123456789abcdef0",
+                headers={"X-API-Key": "dev-key"},
+            )
 
     assert response.status_code == 200
 
@@ -65,6 +70,7 @@ def test_health_endpoint_accepts_valid_api_key(monkeypatch):
     assert body["status_code"] == "ok"
     assert body["health"] == "healthy"
     assert "timestamp" in body
+    mock_log_api_request.assert_called_once()
 
 
 def test_health_endpoint_uses_instance_id_from_url(monkeypatch):
@@ -74,17 +80,18 @@ def test_health_endpoint_uses_instance_id_from_url(monkeypatch):
     app = create_app()
     client = app.test_client()
 
-    with patch("app.get_instance_health") as mock_get_instance_health:
-        mock_get_instance_health.return_value = {
-            "state": "running",
-            "status_code": "ok",
-            "health": "healthy",
-        }
+    with patch("app.log_api_request"):
+        with patch("app.get_instance_health") as mock_get_instance_health:
+            mock_get_instance_health.return_value = {
+                "state": "running",
+                "status_code": "ok",
+                "health": "healthy",
+            }
 
-        response = client.get(
-            "/api/health/i-test123456789",
-            headers={"X-API-Key": "dev-key"},
-        )
+            response = client.get(
+                "/api/health/i-test123456789",
+                headers={"X-API-Key": "dev-key"},
+            )
 
     assert response.status_code == 200
     assert response.get_json()["instance_id"] == "i-test123456789"
@@ -113,18 +120,20 @@ def test_health_endpoint_returns_404_for_unknown_instance(monkeypatch):
     app = create_app()
     client = app.test_client()
 
-    with patch("app.get_instance_health") as mock_get_instance_health:
-        mock_get_instance_health.side_effect = InstanceNotFoundError(
-            "Instance not found"
-        )
+    with patch("app.log_api_request") as mock_log_api_request:
+        with patch("app.get_instance_health") as mock_get_instance_health:
+            mock_get_instance_health.side_effect = InstanceNotFoundError(
+                "Instance not found"
+            )
 
-        response = client.get(
-            "/api/health/i-invalid",
-            headers={"X-API-Key": "dev-key"},
-        )
+            response = client.get(
+                "/api/health/i-invalid",
+                headers={"X-API-Key": "dev-key"},
+            )
 
     assert response.status_code == 404
     assert response.get_json() == {"error": "Instance not found"}
+    mock_log_api_request.assert_called_once()
 
 
 def test_health_endpoint_returns_500_when_aws_fails(monkeypatch):
@@ -144,13 +153,15 @@ def test_health_endpoint_returns_500_when_aws_fails(monkeypatch):
         "DescribeInstances",
     )
 
-    with patch("app.get_instance_health") as mock_get_instance_health:
-        mock_get_instance_health.side_effect = aws_error
+    with patch("app.log_api_request") as mock_log_api_request:
+        with patch("app.get_instance_health") as mock_get_instance_health:
+            mock_get_instance_health.side_effect = aws_error
 
-        response = client.get(
-            "/api/health/i-0123456789abcdef0",
-            headers={"X-API-Key": "dev-key"},
-        )
+            response = client.get(
+                "/api/health/i-0123456789abcdef0",
+                headers={"X-API-Key": "dev-key"},
+            )
 
     assert response.status_code == 500
     assert response.get_json() == {"error": "AWS API failed"}
+    mock_log_api_request.assert_called_once()
