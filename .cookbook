@@ -13,3 +13,7 @@ aws ec2 describe-instances \
 
 curl -i \                   
   -H "X-API-Key: dev-key" \  http://127.0.0.1:5000/api/health/i-
+
+# notes
+- issue with the current text key
+- edge cases, maybe?
