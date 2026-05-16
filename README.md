@@ -28,6 +28,8 @@ audit purposes.
 ├── config.py              # Environment configuration helpers
 ├── exceptions.py          # Custom application exceptions
 ├── logger.py              # Structured request logging
+├── Makefile               # Local developer workflow commands
+├── pyproject.toml         # Formatter configuration
 ├── requirements.txt       # Python dependencies
 ├── pytest.ini             # Pytest and coverage configuration
 ├── .env.example           # Example environment configuration
@@ -106,6 +108,37 @@ Install dependencies:
 ```bash
 python -m pip install -r requirements.txt
 ```
+
+## Developer Commands
+
+A `Makefile` is included to make common local development tasks easier to
+run and to give reviewers a consistent way to validate the project. It does
+not replace the underlying Python tooling. It simply wraps the same commands
+documented in this README.
+
+```bash
+make install
+make run
+make test
+make lint
+make format
+make check
+```
+
+Useful commands:
+
+| Command | Purpose |
+|---|---|
+| `make install` | Install dependencies from `requirements.txt`. |
+| `make run` | Start the Flask API locally. |
+| `make test` | Run the test suite with coverage. |
+| `make lint` | Run `flake8` checks. |
+| `make format` | Format Python files with Black using a 79-character line length. |
+| `make check` | Run linting and tests together before committing. |
+
+The `Makefile` is intentionally small. It avoids adding deployment or
+infrastructure complexity, while making the assessment easier to review and
+verify locally.
 
 ## Running Locally
 
@@ -243,6 +276,12 @@ Run the test suite:
 python -m pytest
 ```
 
+Or use:
+
+```bash
+make test
+```
+
 The project is configured to show coverage automatically through `pytest.ini`.
 
 To run coverage explicitly:
@@ -254,16 +293,34 @@ python -m pytest --cov=. --cov-report=term-missing
 AWS calls are mocked in the tests. The test suite should not make real requests
 to AWS.
 
-## Linting
+## Linting and Formatting
 
-Run:
+Run linting directly:
 
 ```bash
 python -m flake8 .
 ```
 
-The code should follow PEP 8 conventions, including readable names, clear
-function boundaries, and line lengths kept to a reasonable limit.
+Or use the Makefile wrapper:
+
+```bash
+make lint
+```
+
+Format the code with Black:
+
+```bash
+python -m black --line-length 79 .
+```
+
+Or use:
+
+```bash
+make format
+```
+
+The assessment specifies a maximum line length of 79 characters, so Black is
+configured through `pyproject.toml` to match that requirement.
 
 ## Git Workflow
 
@@ -286,6 +343,11 @@ Document setup and usage
 ```
 
 Each commit should be small, focused, and descriptive.
+
+Optional improvements should be kept on a separate branch from the original
+assessment solution. This keeps the submitted implementation easy to review
+while still allowing production-readiness improvements to be explored
+separately.
 
 ## Assumptions
 
