@@ -34,6 +34,8 @@ audit purposes.
 ├── requirements.txt       # Python dependencies
 ├── pytest.ini             # Pytest and coverage configuration
 ├── .env.example           # Example environment configuration
+├── docs/
+│   └── ARCHITECTURE.md    # Design notes and production considerations
 ├── logs/
 │   └── .gitkeep           # Keeps the logs directory in Git
 └── tests/
@@ -359,9 +361,21 @@ Example optional improvement commits:
 ```text
 Add developer workflow commands
 Add request correlation IDs
+Add architecture notes
 ```
 
 Each commit should be small, focused, and descriptive.
+
+## Architecture Notes
+
+Additional design notes are available in:
+
+```text
+docs/ARCHITECTURE.md
+```
+
+This file explains the request flow, module responsibilities, error handling,
+testing strategy, security considerations, and production trade-offs.
 
 ## Assumptions
 
@@ -389,4 +403,5 @@ Each commit should be small, focused, and descriptive.
 - Add rate limiting.
 - Add Docker support.
 - Add CI pipeline for linting and tests.
+- Add centralised logging or metrics if deployment requirements justify it.
 - Emit JSON logs for centralised logging platforms if required.
