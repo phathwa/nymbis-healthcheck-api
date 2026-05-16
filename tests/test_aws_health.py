@@ -181,3 +181,63 @@ def test_get_instance_health_returns_combined_result():
         "status_code": "ok",
         "health": "healthy",
     }
+
+
+def test_get_instance_state_raises_not_found_for_empty_instances():
+    """Empty instance lists should be treated as instance not found."""
+    ec2_client = Mock()
+    ec2_client.describe_instances.return_value = {
+        "Reservations": [
+            {
+                "Instances": [],
+            }
+        ]
+    }
+
+    with pytest.raises(InstanceNotFoundError):
+        get_instance_state(ec2_client, "i-missing")
+
+
+def test_get_instance_state_returns_unknown_when_state_name_missing():
+    """Missing EC2 state names should return unknown."""
+    ec2_client = Mock()
+    ec2_client.describe_instances.return_value = {
+        "Reservations": [
+            {
+                "Instances": [
+                    {
+                        "State": {},
+                    }
+                ]
+            }
+        ]
+    }
+
+    state = get_instance_state(ec2_client, "i-0123456789abcdef0")
+
+    assert state == "unknown"
+
+
+def test_get_instance_status_code_returns_unknown_when_key_missing():
+    """Missing instance status key should return unknown."""
+    ec2_client = Mock()
+    ec2_client.describe_instance_status.return_value = {"InstanceStatuses": [{}]}
+
+    status_code = get_instance_status_code(
+        ec2_client,
+        "i-0123456789abcdef0",
+    )
+
+    assert status_code == "unknown"
+
+
+def test_get_instance_health_reraises_instance_not_found():
+    """Missing instances should be re-raised for the Flask layer."""
+    ec2_client = Mock()
+    ec2_client.describe_instances.return_value = {
+        "Reservations": [],
+    }
+
+    with patch("aws_health.create_ec2_client", return_value=ec2_client):
+        with pytest.raises(InstanceNotFoundError):
+            get_instance_health("i-missing")

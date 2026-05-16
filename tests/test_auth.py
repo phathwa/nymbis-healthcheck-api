@@ -37,3 +37,20 @@ def test_api_keys_are_trimmed(monkeypatch):
 
     assert is_valid_api_key("key-one") is True
     assert is_valid_api_key("key-two") is True
+
+
+def test_multiple_valid_api_keys_are_supported(monkeypatch):
+    """Any configured key in the comma-separated list should be accepted."""
+    monkeypatch.setenv("VALID_API_KEYS", "key-one,key-two,key-three")
+
+    assert is_valid_api_key("key-one") is True
+    assert is_valid_api_key("key-two") is True
+    assert is_valid_api_key("key-three") is True
+
+
+def test_configured_keys_are_case_sensitive(monkeypatch):
+    """API keys should be treated as case-sensitive secrets."""
+    monkeypatch.setenv("VALID_API_KEYS", "Key-One")
+
+    assert is_valid_api_key("key-one") is False
+    assert is_valid_api_key("Key-One") is True

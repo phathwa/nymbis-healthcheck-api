@@ -2,33 +2,48 @@
 
 from unittest.mock import patch
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 from app import create_app
 from exceptions import InstanceNotFoundError
 
 
+def make_client(monkeypatch):
+    """Create a test client with a configured API key.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+
+    Returns:
+        FlaskClient: Flask test client.
+    """
+    monkeypatch.setenv("VALID_API_KEYS", "dev-key")
+    app = create_app()
+
+    return app.test_client()
+
+
 def test_health_endpoint_requires_api_key(monkeypatch):
     """Requests without an API key should return 401."""
-    monkeypatch.setenv("VALID_API_KEYS", "dev-key")
-
-    app = create_app()
-    client = app.test_client()
+    client = make_client(monkeypatch)
 
     with patch("app.log_api_request") as mock_log_api_request:
         response = client.get("/api/health/i-0123456789abcdef0")
 
     assert response.status_code == 401
     assert response.get_json() == {"error": "Unauthorized"}
-    mock_log_api_request.assert_called_once()
+    mock_log_api_request.assert_called_once_with(
+        method="GET",
+        path="/api/health/i-0123456789abcdef0",
+        api_key=None,
+        status_code=401,
+        error="Unauthorized",
+    )
 
 
 def test_health_endpoint_rejects_invalid_api_key(monkeypatch):
     """Requests with invalid API keys should return 401."""
-    monkeypatch.setenv("VALID_API_KEYS", "dev-key")
-
-    app = create_app()
-    client = app.test_client()
+    client = make_client(monkeypatch)
 
     with patch("app.log_api_request") as mock_log_api_request:
         response = client.get(
@@ -38,15 +53,18 @@ def test_health_endpoint_rejects_invalid_api_key(monkeypatch):
 
     assert response.status_code == 401
     assert response.get_json() == {"error": "Unauthorized"}
-    mock_log_api_request.assert_called_once()
+    mock_log_api_request.assert_called_once_with(
+        method="GET",
+        path="/api/health/i-0123456789abcdef0",
+        api_key="wrong-key",
+        status_code=401,
+        error="Unauthorized",
+    )
 
 
 def test_health_endpoint_accepts_valid_api_key(monkeypatch):
     """Requests with a valid API key should return health JSON."""
-    monkeypatch.setenv("VALID_API_KEYS", "dev-key")
-
-    app = create_app()
-    client = app.test_client()
+    client = make_client(monkeypatch)
 
     with patch("app.log_api_request") as mock_log_api_request:
         with patch("app.get_instance_health") as mock_get_instance_health:
@@ -70,15 +88,20 @@ def test_health_endpoint_accepts_valid_api_key(monkeypatch):
     assert body["status_code"] == "ok"
     assert body["health"] == "healthy"
     assert "timestamp" in body
-    mock_log_api_request.assert_called_once()
+
+    mock_get_instance_health.assert_called_once_with("i-0123456789abcdef0")
+    mock_log_api_request.assert_called_once_with(
+        method="GET",
+        path="/api/health/i-0123456789abcdef0",
+        api_key="dev-key",
+        status_code=200,
+        result="healthy",
+    )
 
 
 def test_health_endpoint_uses_instance_id_from_url(monkeypatch):
     """The instance ID should be read from the URL path."""
-    monkeypatch.setenv("VALID_API_KEYS", "dev-key")
-
-    app = create_app()
-    client = app.test_client()
+    client = make_client(monkeypatch)
 
     with patch("app.log_api_request"):
         with patch("app.get_instance_health") as mock_get_instance_health:
@@ -100,10 +123,7 @@ def test_health_endpoint_uses_instance_id_from_url(monkeypatch):
 
 def test_health_endpoint_does_not_accept_post(monkeypatch):
     """The health endpoint should only accept GET requests."""
-    monkeypatch.setenv("VALID_API_KEYS", "dev-key")
-
-    app = create_app()
-    client = app.test_client()
+    client = make_client(monkeypatch)
 
     response = client.post(
         "/api/health/i-0123456789abcdef0",
@@ -115,10 +135,7 @@ def test_health_endpoint_does_not_accept_post(monkeypatch):
 
 def test_health_endpoint_returns_404_for_unknown_instance(monkeypatch):
     """Unknown EC2 instances should return 404."""
-    monkeypatch.setenv("VALID_API_KEYS", "dev-key")
-
-    app = create_app()
-    client = app.test_client()
+    client = make_client(monkeypatch)
 
     with patch("app.log_api_request") as mock_log_api_request:
         with patch("app.get_instance_health") as mock_get_instance_health:
@@ -133,15 +150,18 @@ def test_health_endpoint_returns_404_for_unknown_instance(monkeypatch):
 
     assert response.status_code == 404
     assert response.get_json() == {"error": "Instance not found"}
-    mock_log_api_request.assert_called_once()
+    mock_log_api_request.assert_called_once_with(
+        method="GET",
+        path="/api/health/i-invalid",
+        api_key="dev-key",
+        status_code=404,
+        error="Instance not found",
+    )
 
 
-def test_health_endpoint_returns_500_when_aws_fails(monkeypatch):
-    """Unexpected AWS API failures should return 500."""
-    monkeypatch.setenv("VALID_API_KEYS", "dev-key")
-
-    app = create_app()
-    client = app.test_client()
+def test_health_endpoint_returns_500_when_client_error_occurs(monkeypatch):
+    """Unexpected AWS client errors should return 500."""
+    client = make_client(monkeypatch)
 
     aws_error = ClientError(
         {
@@ -164,4 +184,70 @@ def test_health_endpoint_returns_500_when_aws_fails(monkeypatch):
 
     assert response.status_code == 500
     assert response.get_json() == {"error": "AWS API failed"}
-    mock_log_api_request.assert_called_once()
+    mock_log_api_request.assert_called_once_with(
+        method="GET",
+        path="/api/health/i-0123456789abcdef0",
+        api_key="dev-key",
+        status_code=500,
+        error="AWS API failed",
+    )
+
+
+def test_health_endpoint_returns_500_when_botocore_error_occurs(monkeypatch):
+    """Unexpected boto3 core errors should return 500."""
+    client = make_client(monkeypatch)
+
+    with patch("app.log_api_request") as mock_log_api_request:
+        with patch("app.get_instance_health") as mock_get_instance_health:
+            mock_get_instance_health.side_effect = BotoCoreError()
+
+            response = client.get(
+                "/api/health/i-0123456789abcdef0",
+                headers={"X-API-Key": "dev-key"},
+            )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "AWS API failed"}
+    mock_log_api_request.assert_called_once_with(
+        method="GET",
+        path="/api/health/i-0123456789abcdef0",
+        api_key="dev-key",
+        status_code=500,
+        error="AWS API failed",
+    )
+
+
+def test_health_endpoint_returns_json_content_type(monkeypatch):
+    """Successful API responses should use a JSON content type."""
+    client = make_client(monkeypatch)
+
+    with patch("app.log_api_request"):
+        with patch("app.get_instance_health") as mock_get_instance_health:
+            mock_get_instance_health.return_value = {
+                "state": "running",
+                "status_code": "ok",
+                "health": "healthy",
+            }
+
+            response = client.get(
+                "/api/health/i-0123456789abcdef0",
+                headers={"X-API-Key": "dev-key"},
+            )
+
+    assert response.status_code == 200
+    assert response.content_type.startswith("application/json")
+
+
+def test_health_endpoint_does_not_call_aws_when_auth_fails(monkeypatch):
+    """AWS should not be called when authentication fails."""
+    client = make_client(monkeypatch)
+
+    with patch("app.log_api_request"):
+        with patch("app.get_instance_health") as mock_get_instance_health:
+            response = client.get(
+                "/api/health/i-0123456789abcdef0",
+                headers={"X-API-Key": "wrong-key"},
+            )
+
+    assert response.status_code == 401
+    mock_get_instance_health.assert_not_called()
