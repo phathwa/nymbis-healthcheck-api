@@ -2,9 +2,12 @@
 
 from datetime import datetime, timezone
 
+from botocore.exceptions import BotoCoreError, ClientError
 from flask import Flask, jsonify, request
 
 from auth import AUTH_ERROR_RESPONSE, is_valid_api_key
+from aws_health import get_instance_health
+from exceptions import InstanceNotFoundError
 
 
 def get_current_timestamp():
@@ -16,25 +19,35 @@ def get_current_timestamp():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def create_health_response(instance_id):
-    """Create a basic health response for an EC2 instance.
-
-    This response is intentionally static for now because the AWS EC2
-    integration will be added in a separate commit.
+def create_health_response(instance_id, health_result):
+    """Create a health response for an EC2 instance.
 
     Args:
         instance_id (str): EC2 instance ID from the URL path.
+        health_result (dict): EC2 health details.
 
     Returns:
         dict: Health response payload.
     """
     return {
         "instance_id": instance_id,
-        "state": "unknown",
-        "status_code": "unknown",
-        "health": "unknown",
+        "state": health_result["state"],
+        "status_code": health_result["status_code"],
+        "health": health_result["health"],
         "timestamp": get_current_timestamp(),
     }
+
+
+def create_error_response(message):
+    """Create a consistent error response.
+
+    Args:
+        message (str): Error message.
+
+    Returns:
+        dict: Error response payload.
+    """
+    return {"error": message}
 
 
 def create_app():
@@ -60,7 +73,14 @@ def create_app():
         if not is_valid_api_key(api_key):
             return jsonify(AUTH_ERROR_RESPONSE), 401
 
-        return jsonify(create_health_response(instance_id)), 200
+        try:
+            health_result = get_instance_health(instance_id)
+        except InstanceNotFoundError:
+            return jsonify(create_error_response("Instance not found")), 404
+        except (BotoCoreError, ClientError):
+            return jsonify(create_error_response("AWS API failed")), 500
+
+        return jsonify(create_health_response(instance_id, health_result)), 200
 
     return app
 
