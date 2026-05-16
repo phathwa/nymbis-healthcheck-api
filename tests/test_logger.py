@@ -29,6 +29,8 @@ def test_configure_logger_writes_to_file(monkeypatch, tmp_path):
 
     api_logger = api_logger_module.configure_logger()
 
+    # Python loggers keep handlers globally between tests, so we reset
+    # them here to avoid duplicate log entries and keep assertions predictable.
     api_logger.handlers.clear()
 
     file_handler = logging.FileHandler(log_file)
