@@ -1,0 +1,10 @@
+Set up Flask health check API project
+Add API key authentication
+Add health check API endpoint
+Implement EC2 instance health checks
+Add structured request logging
+Expand pytest coverage for API behaviour
+Document setup and usage
+
+# commands
+
