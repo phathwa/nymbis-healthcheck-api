@@ -1,11 +1,12 @@
 """Flask application for EC2 health checks."""
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from botocore.exceptions import BotoCoreError, ClientError
 from flask import Flask, jsonify, request
 
-from auth import AUTH_ERROR_RESPONSE, is_valid_api_key
+from auth import is_valid_api_key
 from aws_health import get_instance_health
 from exceptions import InstanceNotFoundError
 from logger import log_api_request
@@ -20,17 +21,19 @@ def get_current_timestamp():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def create_health_response(instance_id, health_result):
+def create_health_response(instance_id, health_result, request_id):
     """Create a health response for an EC2 instance.
 
     Args:
         instance_id (str): EC2 instance ID from the URL path.
         health_result (dict): EC2 health details.
+        request_id (str): Correlation ID for tracing the request.
 
     Returns:
         dict: Health response payload.
     """
     return {
+        "request_id": request_id,
         "instance_id": instance_id,
         "state": health_result["state"],
         "status_code": health_result["status_code"],
@@ -39,16 +42,20 @@ def create_health_response(instance_id, health_result):
     }
 
 
-def create_error_response(message):
+def create_error_response(message, request_id):
     """Create a consistent error response.
 
     Args:
         message (str): Error message.
+        request_id (str): Correlation ID for tracing the request.
 
     Returns:
         dict: Error response payload.
     """
-    return {"error": message}
+    return {
+        "request_id": request_id,
+        "error": message,
+    }
 
 
 def build_response(payload, status_code):
@@ -85,6 +92,7 @@ def create_app():
         api_key = request.headers.get("X-API-Key")
         method = request.method
         path = request.path
+        request_id = str(uuid4())
 
         if not is_valid_api_key(api_key):
             log_api_request(
@@ -93,8 +101,12 @@ def create_app():
                 api_key=api_key,
                 status_code=401,
                 error="Unauthorized",
+                request_id=request_id,
             )
-            return build_response(AUTH_ERROR_RESPONSE, 401)
+            return build_response(
+                create_error_response("Unauthorized", request_id),
+                401,
+            )
 
         try:
             health_result = get_instance_health(instance_id)
@@ -106,8 +118,12 @@ def create_app():
                 api_key=api_key,
                 status_code=404,
                 error=error_message,
+                request_id=request_id,
             )
-            return build_response(create_error_response(error_message), 404)
+            return build_response(
+                create_error_response(error_message, request_id),
+                404,
+            )
         except (BotoCoreError, ClientError):
             error_message = "AWS API failed"
             log_api_request(
@@ -116,10 +132,18 @@ def create_app():
                 api_key=api_key,
                 status_code=500,
                 error=error_message,
+                request_id=request_id,
             )
-            return build_response(create_error_response(error_message), 500)
+            return build_response(
+                create_error_response(error_message, request_id),
+                500,
+            )
 
-        response_body = create_health_response(instance_id, health_result)
+        response_body = create_health_response(
+            instance_id,
+            health_result,
+            request_id,
+        )
 
         log_api_request(
             method=method,
@@ -127,6 +151,7 @@ def create_app():
             api_key=api_key,
             status_code=200,
             result=response_body["health"],
+            request_id=request_id,
         )
 
         return build_response(response_body, 200)

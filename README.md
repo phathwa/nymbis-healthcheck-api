@@ -12,6 +12,7 @@ audit purposes.
 - API key authentication using the `X-API-Key` request header
 - AWS EC2 integration using `boto3`
 - Human-readable health status derived from EC2 state and status checks
+- Request correlation IDs for tracing responses to log entries
 - Structured request logging to `logs/api.log`
 - Unit tests using `pytest`
 - AWS calls mocked during tests
@@ -111,10 +112,11 @@ python -m pip install -r requirements.txt
 
 ## Developer Commands
 
-A `Makefile` is included to make common local development tasks easier to
-run and to give reviewers a consistent way to validate the project. It does
-not replace the underlying Python tooling. It simply wraps the same commands
-documented in this README.
+A `Makefile` is included to make common local development tasks easier to run
+and to give reviewers a consistent way to validate the project.
+
+It does not replace the underlying Python tooling. It simply wraps the same
+commands documented elsewhere in this README.
 
 ```bash
 make install
@@ -125,20 +127,7 @@ make format
 make check
 ```
 
-Useful commands:
-
-| Command | Purpose |
-|---|---|
-| `make install` | Install dependencies from `requirements.txt`. |
-| `make run` | Start the Flask API locally. |
-| `make test` | Run the test suite with coverage. |
-| `make lint` | Run `flake8` checks. |
-| `make format` | Format Python files with Black using a 79-character line length. |
-| `make check` | Run linting and tests together before committing. |
-
-The `Makefile` is intentionally small. It avoids adding deployment or
-infrastructure complexity, while making the assessment easier to review and
-verify locally.
+The `make check` command runs linting and tests together.
 
 ## Running Locally
 
@@ -146,6 +135,12 @@ Start the Flask app:
 
 ```bash
 python app.py
+```
+
+Or use the Makefile command:
+
+```bash
+make run
 ```
 
 The API will be available at:
@@ -176,6 +171,7 @@ curl -i \
 
 ```json
 {
+  "request_id": "6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a",
   "instance_id": "i-0123456789abcdef0",
   "state": "running",
   "status_code": "ok",
@@ -190,6 +186,7 @@ Returned when the `X-API-Key` header is missing or invalid.
 
 ```json
 {
+  "request_id": "6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a",
   "error": "Unauthorized"
 }
 ```
@@ -198,6 +195,7 @@ Returned when the `X-API-Key` header is missing or invalid.
 
 ```json
 {
+  "request_id": "6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a",
   "error": "Instance not found"
 }
 ```
@@ -206,6 +204,7 @@ Returned when the `X-API-Key` header is missing or invalid.
 
 ```json
 {
+  "request_id": "6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a",
   "error": "AWS API failed"
 }
 ```
@@ -239,6 +238,7 @@ Missing and invalid API keys return the same response:
 
 ```json
 {
+  "request_id": "6f5c8c9d-1b73-4d51-b30f-7c2e75c29f1a",
   "error": "Unauthorized"
 }
 ```
@@ -256,17 +256,26 @@ logs/api.log
 Example success log:
 
 ```text
-2026-05-16 12:30:45 | GET /api/health/i-012345 | Key: abc123def4 | Status: 200 | Result: healthy
+2026-05-16 12:30:45 | Request: 6f5c8c9d | GET /api/health/i-012345 | Key: abc123def4 | Status: 200 | Result: healthy
 ```
 
 Example error log:
 
 ```text
-2026-05-16 12:31:12 | GET /api/health/i-invalid | Key: abc123def4 | Status: 404 | Error: Instance not found
+2026-05-16 12:31:12 | Request: 7a6b5c4d | GET /api/health/i-invalid | Key: abc123def4 | Status: 404 | Error: Instance not found
 ```
 
 Only the first 10 characters of the API key are logged. Full API keys and AWS
 credentials must never be logged.
+
+## Request Correlation
+
+Each API response includes a `request_id`. The same ID is written to the log
+entry for that request, making it easier to trace a response back to the
+corresponding audit log line.
+
+Only the first eight characters of the request ID are shown in the log to keep
+entries readable.
 
 ## Running Tests
 
@@ -276,7 +285,7 @@ Run the test suite:
 python -m pytest
 ```
 
-Or use:
+Or:
 
 ```bash
 make test
@@ -295,32 +304,32 @@ to AWS.
 
 ## Linting and Formatting
 
-Run linting directly:
+Run linting:
 
 ```bash
 python -m flake8 .
 ```
 
-Or use the Makefile wrapper:
+Or:
 
 ```bash
 make lint
 ```
 
-Format the code with Black:
+Format code:
 
 ```bash
 python -m black --line-length 79 .
 ```
 
-Or use:
+Or:
 
 ```bash
 make format
 ```
 
-The assessment specifies a maximum line length of 79 characters, so Black is
-configured through `pyproject.toml` to match that requirement.
+The project uses a 79-character line length to match the assessment
+requirements.
 
 ## Git Workflow
 
@@ -342,12 +351,17 @@ Expand pytest coverage for API behaviour
 Document setup and usage
 ```
 
-Each commit should be small, focused, and descriptive.
+Optional operability improvements were added on a separate branch to keep the
+original assessment submission clear and easy to review.
 
-Optional improvements should be kept on a separate branch from the original
-assessment solution. This keeps the submitted implementation easy to review
-while still allowing production-readiness improvements to be explored
-separately.
+Example optional improvement commits:
+
+```text
+Add developer workflow commands
+Add request correlation IDs
+```
+
+Each commit should be small, focused, and descriptive.
 
 ## Assumptions
 
@@ -372,7 +386,6 @@ separately.
 
 - Add support for Azure and GCP health checks.
 - Store hashed API keys instead of plain environment values.
-- Add request correlation IDs.
 - Add rate limiting.
 - Add Docker support.
 - Add CI pipeline for linting and tests.

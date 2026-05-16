@@ -7,4 +7,9 @@ Expand pytest coverage for API behaviour
 Document setup and usage
 
 # commands
+aws ec2 describe-instances \                                
+  --query "Reservations[].Instances[].{ID:InstanceId,State:State.Name,Type:InstanceType,AZ:Placement.AvailabilityZone}" \                                                 
+  --output table
 
+curl -i \                   
+  -H "X-API-Key: dev-key" \  http://127.0.0.1:5000/api/health/i-

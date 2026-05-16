@@ -57,9 +57,15 @@ def configure_logger():
 
 
 def log_api_request(
-    method, path, api_key, status_code, result=None, error=None
+    method,
+    path,
+    api_key,
+    status_code,
+    result=None,
+    error=None,
+    request_id=None,
 ):
-    """Log an API request and its outcome.
+    """Log an API request and outcome.
 
     Args:
         method (str): HTTP method used for the request.
@@ -68,10 +74,12 @@ def log_api_request(
         status_code (int): HTTP status code returned.
         result (str | None): Health result when the request succeeds.
         error (str | None): Error message when the request fails.
+        request_id (str | None): Correlation ID for tracing a request.
     """
     logger = configure_logger()
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     key_prefix = mask_api_key(api_key)
+    request_label = request_id[:8] if request_id else "none"
 
     outcome = f"Result: {result}"
 
@@ -79,8 +87,9 @@ def log_api_request(
         outcome = f"Error: {error}"
 
     logger.info(
-        "%s | %s %s | Key: %s | Status: %s | %s",
+        "%s | Request: %s | %s %s | Key: %s | Status: %s | %s",
         timestamp,
+        request_label,
         method,
         path,
         key_prefix,

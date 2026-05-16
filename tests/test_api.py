@@ -30,15 +30,19 @@ def test_health_endpoint_requires_api_key(monkeypatch):
     with patch("app.log_api_request") as mock_log_api_request:
         response = client.get("/api/health/i-0123456789abcdef0")
 
+    body = response.get_json()
+    log_kwargs = mock_log_api_request.call_args.kwargs
+
     assert response.status_code == 401
-    assert response.get_json() == {"error": "Unauthorized"}
-    mock_log_api_request.assert_called_once_with(
-        method="GET",
-        path="/api/health/i-0123456789abcdef0",
-        api_key=None,
-        status_code=401,
-        error="Unauthorized",
-    )
+    assert body["error"] == "Unauthorized"
+    assert "request_id" in body
+
+    assert log_kwargs["method"] == "GET"
+    assert log_kwargs["path"] == "/api/health/i-0123456789abcdef0"
+    assert log_kwargs["api_key"] is None
+    assert log_kwargs["status_code"] == 401
+    assert log_kwargs["error"] == "Unauthorized"
+    assert log_kwargs["request_id"] == body["request_id"]
 
 
 def test_health_endpoint_rejects_invalid_api_key(monkeypatch):
@@ -51,15 +55,19 @@ def test_health_endpoint_rejects_invalid_api_key(monkeypatch):
             headers={"X-API-Key": "wrong-key"},
         )
 
+    body = response.get_json()
+    log_kwargs = mock_log_api_request.call_args.kwargs
+
     assert response.status_code == 401
-    assert response.get_json() == {"error": "Unauthorized"}
-    mock_log_api_request.assert_called_once_with(
-        method="GET",
-        path="/api/health/i-0123456789abcdef0",
-        api_key="wrong-key",
-        status_code=401,
-        error="Unauthorized",
-    )
+    assert body["error"] == "Unauthorized"
+    assert "request_id" in body
+
+    assert log_kwargs["method"] == "GET"
+    assert log_kwargs["path"] == "/api/health/i-0123456789abcdef0"
+    assert log_kwargs["api_key"] == "wrong-key"
+    assert log_kwargs["status_code"] == 401
+    assert log_kwargs["error"] == "Unauthorized"
+    assert log_kwargs["request_id"] == body["request_id"]
 
 
 def test_health_endpoint_accepts_valid_api_key(monkeypatch):
@@ -79,24 +87,25 @@ def test_health_endpoint_accepts_valid_api_key(monkeypatch):
                 headers={"X-API-Key": "dev-key"},
             )
 
-    assert response.status_code == 200
-
     body = response.get_json()
+    log_kwargs = mock_log_api_request.call_args.kwargs
 
+    assert response.status_code == 200
     assert body["instance_id"] == "i-0123456789abcdef0"
     assert body["state"] == "running"
     assert body["status_code"] == "ok"
     assert body["health"] == "healthy"
     assert "timestamp" in body
+    assert "request_id" in body
 
     mock_get_instance_health.assert_called_once_with("i-0123456789abcdef0")
-    mock_log_api_request.assert_called_once_with(
-        method="GET",
-        path="/api/health/i-0123456789abcdef0",
-        api_key="dev-key",
-        status_code=200,
-        result="healthy",
-    )
+
+    assert log_kwargs["method"] == "GET"
+    assert log_kwargs["path"] == "/api/health/i-0123456789abcdef0"
+    assert log_kwargs["api_key"] == "dev-key"
+    assert log_kwargs["status_code"] == 200
+    assert log_kwargs["result"] == "healthy"
+    assert log_kwargs["request_id"] == body["request_id"]
 
 
 def test_health_endpoint_uses_instance_id_from_url(monkeypatch):
@@ -148,18 +157,24 @@ def test_health_endpoint_returns_404_for_unknown_instance(monkeypatch):
                 headers={"X-API-Key": "dev-key"},
             )
 
+    body = response.get_json()
+    log_kwargs = mock_log_api_request.call_args.kwargs
+
     assert response.status_code == 404
-    assert response.get_json() == {"error": "Instance not found"}
-    mock_log_api_request.assert_called_once_with(
-        method="GET",
-        path="/api/health/i-invalid",
-        api_key="dev-key",
-        status_code=404,
-        error="Instance not found",
-    )
+    assert body["error"] == "Instance not found"
+    assert "request_id" in body
+
+    assert log_kwargs["method"] == "GET"
+    assert log_kwargs["path"] == "/api/health/i-invalid"
+    assert log_kwargs["api_key"] == "dev-key"
+    assert log_kwargs["status_code"] == 404
+    assert log_kwargs["error"] == "Instance not found"
+    assert log_kwargs["request_id"] == body["request_id"]
 
 
-def test_health_endpoint_returns_500_when_client_error_occurs(monkeypatch):
+def test_health_endpoint_returns_500_when_client_error_occurs(
+    monkeypatch,
+):
     """Unexpected AWS client errors should return 500."""
     client = make_client(monkeypatch)
 
@@ -182,18 +197,24 @@ def test_health_endpoint_returns_500_when_client_error_occurs(monkeypatch):
                 headers={"X-API-Key": "dev-key"},
             )
 
+    body = response.get_json()
+    log_kwargs = mock_log_api_request.call_args.kwargs
+
     assert response.status_code == 500
-    assert response.get_json() == {"error": "AWS API failed"}
-    mock_log_api_request.assert_called_once_with(
-        method="GET",
-        path="/api/health/i-0123456789abcdef0",
-        api_key="dev-key",
-        status_code=500,
-        error="AWS API failed",
-    )
+    assert body["error"] == "AWS API failed"
+    assert "request_id" in body
+
+    assert log_kwargs["method"] == "GET"
+    assert log_kwargs["path"] == "/api/health/i-0123456789abcdef0"
+    assert log_kwargs["api_key"] == "dev-key"
+    assert log_kwargs["status_code"] == 500
+    assert log_kwargs["error"] == "AWS API failed"
+    assert log_kwargs["request_id"] == body["request_id"]
 
 
-def test_health_endpoint_returns_500_when_botocore_error_occurs(monkeypatch):
+def test_health_endpoint_returns_500_when_botocore_error_occurs(
+    monkeypatch,
+):
     """Unexpected boto3 core errors should return 500."""
     client = make_client(monkeypatch)
 
@@ -206,15 +227,19 @@ def test_health_endpoint_returns_500_when_botocore_error_occurs(monkeypatch):
                 headers={"X-API-Key": "dev-key"},
             )
 
+    body = response.get_json()
+    log_kwargs = mock_log_api_request.call_args.kwargs
+
     assert response.status_code == 500
-    assert response.get_json() == {"error": "AWS API failed"}
-    mock_log_api_request.assert_called_once_with(
-        method="GET",
-        path="/api/health/i-0123456789abcdef0",
-        api_key="dev-key",
-        status_code=500,
-        error="AWS API failed",
-    )
+    assert body["error"] == "AWS API failed"
+    assert "request_id" in body
+
+    assert log_kwargs["method"] == "GET"
+    assert log_kwargs["path"] == "/api/health/i-0123456789abcdef0"
+    assert log_kwargs["api_key"] == "dev-key"
+    assert log_kwargs["status_code"] == 500
+    assert log_kwargs["error"] == "AWS API failed"
+    assert log_kwargs["request_id"] == body["request_id"]
 
 
 def test_health_endpoint_returns_json_content_type(monkeypatch):
